@@ -25,12 +25,22 @@ async def join_voice_channel(ctx):
 
             await voice_client.move_to(target_channel)
 
+            await ctx.guild.change_voice_state(
+                channel=target_channel,
+                self_deaf=True,
+            )
+
             await ctx.send(
                 f"Moved to **{target_channel.name}**."
             )
             return
 
         voice_client = await target_channel.connect()
+
+        await ctx.guild.change_voice_state(
+            channel=target_channel,
+            self_deaf=True,
+        )
 
         if hasattr(voice_client, "is_dave_connection"):
             if voice_client.is_dave_connection():
@@ -65,33 +75,4 @@ async def join_voice_channel(ctx):
 
         await ctx.send(
             "I couldn't connect to the voice channel."
-        )
-
-
-async def leave_voice_channel(ctx):
-    """Leave the current voice channel."""
-
-    voice_client = ctx.voice_client
-
-    if not voice_client:
-        await ctx.send(
-            "I'm not connected to a voice channel."
-        )
-        return
-
-    try:
-        await voice_client.disconnect()
-
-        await ctx.send(
-            "Left the voice channel."
-        )
-
-    except Exception as exc:
-        print(
-            f"Voice disconnect error: "
-            f"{type(exc).__name__}: {exc}"
-        )
-
-        await ctx.send(
-            "I couldn't disconnect from the voice channel."
         )

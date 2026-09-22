@@ -1,4 +1,5 @@
 from collections import deque
+import random
 
 from bot.music.models import Track
 
@@ -9,6 +10,9 @@ class MusicQueue:
 
     def add(self, track: Track) -> None:
         self._queue.append(track)
+
+    def add_front(self, track: Track) -> None:
+        self._queue.appendleft(track)
 
     def get_next(self) -> Track | None:
         if not self._queue:
@@ -50,6 +54,11 @@ class MusicQueue:
             for track in self._queue
             if track.requester_id == user_id
         ]
+
+    def shuffle(self) -> None:
+        items = list(self._queue)
+        random.shuffle(items)
+        self._queue = deque(items)
 
     def clear(self) -> None:
         self._queue.clear()
