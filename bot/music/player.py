@@ -35,7 +35,6 @@ class MusicPlayer:
 
         self.queues: dict[int, MusicQueue] = {}
         self.current: dict[int, Track] = {}
-
         self.history: dict[int, deque[Track]] = {}
 
         self.loop_mode: dict[int, str] = {}
@@ -46,37 +45,49 @@ class MusicPlayer:
         self.player_messages: dict[int, int] = {}
         self.player_channels: dict[int, int] = {}
 
-        self.started_at: dict[int, float] = {}
-
-    # =========================
+    # =========================================================
     # QUEUE
-    # =========================
+    # =========================================================
 
-    def get_queue(self, guild_id: int) -> MusicQueue:
+    def get_queue(
+        self,
+        guild_id: int,
+    ) -> MusicQueue:
+
         if guild_id not in self.queues:
             self.queues[guild_id] = MusicQueue()
 
         return self.queues[guild_id]
 
-    def get_history(self, guild_id: int) -> deque[Track]:
+    def get_history(
+        self,
+        guild_id: int,
+    ) -> deque[Track]:
+
         if guild_id not in self.history:
-            self.history[guild_id] = deque(maxlen=50)
+            self.history[guild_id] = deque(
+                maxlen=50
+            )
 
         return self.history[guild_id]
 
-    # =========================
+    # =========================================================
     # LOCK
-    # =========================
+    # =========================================================
 
-    def _get_lock(self, guild_id: int) -> asyncio.Lock:
+    def _get_lock(
+        self,
+        guild_id: int,
+    ) -> asyncio.Lock:
+
         if guild_id not in self._locks:
             self._locks[guild_id] = asyncio.Lock()
 
         return self._locks[guild_id]
 
-    # =========================
+    # =========================================================
     # PLAYER MESSAGE
-    # =========================
+    # =========================================================
 
     def set_player_message(
         self,
@@ -84,6 +95,7 @@ class MusicPlayer:
         channel_id: int,
         message_id: int,
     ) -> None:
+
         self.player_channels[guild_id] = channel_id
         self.player_messages[guild_id] = message_id
 
@@ -91,8 +103,14 @@ class MusicPlayer:
         self,
         guild_id: int,
     ) -> tuple[int, int] | None:
-        channel_id = self.player_channels.get(guild_id)
-        message_id = self.player_messages.get(guild_id)
+
+        channel_id = self.player_channels.get(
+            guild_id
+        )
+
+        message_id = self.player_messages.get(
+            guild_id
+        )
 
         if channel_id is None or message_id is None:
             return None
@@ -103,18 +121,39 @@ class MusicPlayer:
         self,
         guild_id: int,
     ) -> None:
-        self.player_channels.pop(guild_id, None)
-        self.player_messages.pop(guild_id, None)
 
-    # =========================
+        self.player_channels.pop(
+            guild_id,
+            None,
+        )
+
+        self.player_messages.pop(
+            guild_id,
+            None,
+        )
+
+    # =========================================================
     # LOOP
-    # =========================
+    # =========================================================
 
-    def get_loop_mode(self, guild_id: int) -> str:
-        return self.loop_mode.get(guild_id, "off")
+    def get_loop_mode(
+        self,
+        guild_id: int,
+    ) -> str:
 
-    def cycle_loop_mode(self, guild_id: int) -> str:
-        current = self.get_loop_mode(guild_id)
+        return self.loop_mode.get(
+            guild_id,
+            "off",
+        )
+
+    def cycle_loop_mode(
+        self,
+        guild_id: int,
+    ) -> str:
+
+        current = self.get_loop_mode(
+            guild_id
+        )
 
         if current == "off":
             new_mode = "one"
@@ -129,12 +168,19 @@ class MusicPlayer:
 
         return new_mode
 
-    # =========================
+    # =========================================================
     # IDLE DISCONNECT
-    # =========================
+    # =========================================================
 
-    def cancel_idle_disconnect(self, guild_id: int) -> None:
-        task = self._idle_tasks.pop(guild_id, None)
+    def cancel_idle_disconnect(
+        self,
+        guild_id: int,
+    ) -> None:
+
+        task = self._idle_tasks.pop(
+            guild_id,
+            None,
+        )
 
         if task and not task.done():
             task.cancel()
@@ -144,12 +190,17 @@ class MusicPlayer:
         guild: discord.Guild,
         voice_client: discord.VoiceClient,
     ) -> None:
-        self.cancel_idle_disconnect(guild.id)
 
-        self._idle_tasks[guild.id] = asyncio.create_task(
-            self._idle_disconnect(
-                guild,
-                voice_client,
+        self.cancel_idle_disconnect(
+            guild.id
+        )
+
+        self._idle_tasks[guild.id] = (
+            asyncio.create_task(
+                self._idle_disconnect(
+                    guild,
+                    voice_client,
+                )
             )
         )
 
@@ -158,12 +209,15 @@ class MusicPlayer:
         guild: discord.Guild,
         voice_client: discord.VoiceClient,
     ) -> None:
+
         try:
             await asyncio.sleep(
                 IDLE_DISCONNECT_DELAY
             )
 
-            queue = self.get_queue(guild.id)
+            queue = self.get_queue(
+                guild.id
+            )
 
             if (
                 queue.is_empty()
@@ -187,9 +241,9 @@ class MusicPlayer:
                 None,
             )
 
-    # =========================
+    # =========================================================
     # PLAYBACK
-    # =========================
+    # =========================================================
 
     async def play_next(
         self,
@@ -203,7 +257,9 @@ class MusicPlayer:
             guild_id
         )
 
-        async with self._get_lock(guild_id):
+        async with self._get_lock(
+            guild_id
+        ):
 
             queue = self.get_queue(
                 guild_id
@@ -225,7 +281,6 @@ class MusicPlayer:
                 track = current
 
             else:
-                # Save finished track to history.
                 if current is not None:
                     history = self.get_history(
                         guild_id
@@ -242,7 +297,7 @@ class MusicPlayer:
                 if track is None:
                     self.current.pop(
                         guild_id,
-                        None
+                        None,
                     )
 
                     if voice_client.is_connected():
@@ -256,17 +311,15 @@ class MusicPlayer:
                 self.current[guild_id] = track
 
             try:
-                stream_url = await self._get_stream_url(
-                    track.webpage_url
+                stream_url = (
+                    await self._get_stream_url(
+                        track.webpage_url
+                    )
                 )
 
                 source = discord.FFmpegPCMAudio(
                     stream_url,
                     **FFMPEG_OPTIONS,
-                )
-
-                self.started_at[guild_id] = (
-                    asyncio.get_running_loop().time()
                 )
 
                 def after_play(error):
@@ -292,6 +345,7 @@ class MusicPlayer:
                 )
 
             except Exception as exc:
+
                 self.current.pop(
                     guild_id,
                     None,
@@ -343,9 +397,9 @@ class MusicPlayer:
 
             return info["url"]
 
-    # =========================
+    # =========================================================
     # PAUSE / RESUME
-    # =========================
+    # =========================================================
 
     async def pause(
         self,
@@ -371,9 +425,9 @@ class MusicPlayer:
 
         return True
 
-    # =========================
+    # =========================================================
     # SKIP
-    # =========================
+    # =========================================================
 
     async def skip(
         self,
@@ -390,9 +444,9 @@ class MusicPlayer:
 
         return True
 
-    # =========================
+    # =========================================================
     # PREVIOUS
-    # =========================
+    # =========================================================
 
     async def previous(
         self,
@@ -413,16 +467,24 @@ class MusicPlayer:
             guild_id
         )
 
+        previous_track = history.pop()
+
         if current is not None:
             self.get_queue(
                 guild_id
-            ).add_front(current)
-
-        previous_track = history.pop()
+            ).add_front(
+                current
+            )
 
         self.current.pop(
             guild_id,
             None,
+        )
+
+        self.get_queue(
+            guild_id
+        ).add_front(
+            previous_track
         )
 
         if (
@@ -431,17 +493,17 @@ class MusicPlayer:
         ):
             voice_client.stop()
 
-        self.get_queue(
-            guild_id
-        ).add_front(
-            previous_track
-        )
+        else:
+            await self.play_next(
+                guild,
+                voice_client,
+            )
 
         return True
 
-    # =========================
+    # =========================================================
     # STOP
-    # =========================
+    # =========================================================
 
     async def stop(
         self,
@@ -470,20 +532,15 @@ class MusicPlayer:
             guild_id
         ] = "off"
 
-        self.started_at.pop(
-            guild_id,
-            None,
-        )
-
         if (
             voice_client.is_playing()
             or voice_client.is_paused()
         ):
             voice_client.stop()
 
-    # =========================
+    # =========================================================
     # LEAVE
-    # =========================
+    # =========================================================
 
     async def leave(
         self,
@@ -512,17 +569,12 @@ class MusicPlayer:
             guild_id
         ] = "off"
 
-        self.started_at.pop(
-            guild_id,
-            None,
-        )
-
         if voice_client.is_connected():
             await voice_client.disconnect()
 
-    # =========================
+    # =========================================================
     # QUEUE MANAGEMENT
-    # =========================
+    # =========================================================
 
     def remove(
         self,
@@ -546,8 +598,15 @@ class MusicPlayer:
     def shuffle_queue(
         self,
         guild_id: int,
-    ) -> None:
+    ) -> bool:
 
-        self.get_queue(
+        queue = self.get_queue(
             guild_id
-        ).shuffle()
+        )
+
+        if len(queue) < 2:
+            return False
+
+        queue.shuffle()
+
+        return True

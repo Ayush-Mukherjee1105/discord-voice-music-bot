@@ -37,7 +37,11 @@ class MusicQueue:
 
         return track
 
-    def remove_user_last(self, user_id: int) -> Track | None:
+    def remove_user_last(
+        self,
+        user_id: int,
+    ) -> Track | None:
+
         items = list(self._queue)
 
         for index in range(len(items) - 1, -1, -1):
@@ -48,7 +52,11 @@ class MusicQueue:
 
         return None
 
-    def user_items(self, user_id: int) -> list[Track]:
+    def user_items(
+        self,
+        user_id: int,
+    ) -> list[Track]:
+
         return [
             track
             for track in self._queue
@@ -57,13 +65,22 @@ class MusicQueue:
 
     def shuffle(self) -> None:
         items = list(self._queue)
+
+        if len(items) < 2:
+            return
+
         random.shuffle(items)
+
         self._queue = deque(items)
 
     def clear(self) -> None:
         self._queue.clear()
 
-    def clear_user(self, user_id: int) -> int:
+    def clear_user(
+        self,
+        user_id: int,
+    ) -> int:
+
         original_length = len(self._queue)
 
         self._queue = deque(

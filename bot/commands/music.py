@@ -26,6 +26,91 @@ class MusicPlayerView(discord.ui.View):
         self.cog = cog
         self.guild_id = guild_id
 
+        self._update_button_states()
+
+    def _update_button_states(self):
+        guild = self.cog.bot.get_guild(
+            self.guild_id
+        )
+
+        if guild is None:
+            return
+
+        voice_client = guild.voice_client
+
+        current = self.cog.player.current.get(
+            self.guild_id
+        )
+
+        history = self.cog.player.get_history(
+            self.guild_id
+        )
+
+        queue = self.cog.player.get_queue(
+            self.guild_id
+        )
+
+        for child in self.children:
+
+            if not isinstance(
+                child,
+                discord.ui.Button,
+            ):
+                continue
+
+            if child.custom_id == "music_previous":
+                child.disabled = not bool(history)
+
+            elif child.custom_id == "music_pause_resume":
+                child.disabled = (
+                    voice_client is None
+                    or (
+                        not voice_client.is_playing()
+                        and not voice_client.is_paused()
+                    )
+                )
+
+                if (
+                    voice_client
+                    and voice_client.is_paused()
+                ):
+                    child.emoji = "▶️"
+
+                else:
+                    child.emoji = "⏸️"
+
+            elif child.custom_id == "music_skip":
+                child.disabled = (
+                    voice_client is None
+                    or not (
+                        voice_client.is_playing()
+                        or voice_client.is_paused()
+                    )
+                )
+
+            elif child.custom_id == "music_shuffle":
+                child.disabled = len(queue) < 2
+
+            elif child.custom_id == "music_loop":
+                child.label = (
+                    f"Loop: "
+                    f"{self.cog.player.get_loop_mode(
+                        self.guild_id
+                    ).upper()}"
+                )
+
+            elif child.custom_id == "music_stop":
+                child.disabled = (
+                    current is None
+                    and (
+                        voice_client is None
+                        or not (
+                            voice_client.is_playing()
+                            or voice_client.is_paused()
+                        )
+                    )
+                )
+
     async def interaction_check(
         self,
         interaction: discord.Interaction,
@@ -45,6 +130,22 @@ class MusicPlayerView(discord.ui.View):
             )
             return False
 
+        voice_client = interaction.guild.voice_client
+
+        if (
+            voice_client
+            and voice_client.channel
+            and interaction.user.voice
+            and interaction.user.voice.channel
+            and interaction.user.voice.channel.id
+            != voice_client.channel.id
+        ):
+            await interaction.response.send_message(
+                "You need to be in the same voice channel as the bot.",
+                ephemeral=True,
+            )
+            return False
+
         return True
 
     @discord.ui.button(
@@ -57,7 +158,10 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        voice_client = interaction.guild.voice_client
+
+        voice_client = (
+            interaction.guild.voice_client
+        )
 
         if voice_client is None:
             await interaction.response.send_message(
@@ -85,7 +189,7 @@ class MusicPlayerView(discord.ui.View):
         )
 
     @discord.ui.button(
-        emoji="⏯️",
+        emoji="⏸️",
         style=discord.ButtonStyle.primary,
         custom_id="music_pause_resume",
     )
@@ -94,7 +198,10 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        voice_client = interaction.guild.voice_client
+
+        voice_client = (
+            interaction.guild.voice_client
+        )
 
         if voice_client is None:
             await interaction.response.send_message(
@@ -104,11 +211,13 @@ class MusicPlayerView(discord.ui.View):
             return
 
         if voice_client.is_paused():
+
             await self.cog.player.resume(
                 voice_client
             )
 
         elif voice_client.is_playing():
+
             await self.cog.player.pause(
                 voice_client
             )
@@ -136,7 +245,10 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        voice_client = interaction.guild.voice_client
+
+        voice_client = (
+            interaction.guild.voice_client
+        )
 
         if voice_client is None:
             await interaction.response.send_message(
@@ -172,17 +284,28 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        self.cog.player.shuffle_queue(
+
+        success = self.cog.player.shuffle_queue(
             interaction.guild.id
         )
 
+        if not success:
+            await interaction.response.send_message(
+                "You need at least two songs in the queue to shuffle.",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.defer()
 
+        # IMPORTANT:
+        # Update the SAME player message.
         await self.cog.update_player_message(
             interaction.guild
         )
 
     @discord.ui.button(
+        label="Loop: OFF",
         emoji="🔁",
         style=discord.ButtonStyle.secondary,
         custom_id="music_loop",
@@ -192,14 +315,12 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
+
         mode = self.cog.player.cycle_loop_mode(
             interaction.guild.id
         )
 
-        await interaction.response.send_message(
-            f"Loop mode: **{mode}**",
-            ephemeral=True,
-        )
+        await interaction.response.defer()
 
         await self.cog.update_player_message(
             interaction.guild
@@ -215,7 +336,10 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        voice_client = interaction.guild.voice_client
+
+        voice_client = (
+            interaction.guild.voice_client
+        )
 
         if voice_client is None:
             await interaction.response.send_message(
@@ -247,12 +371,11 @@ class MusicPlayerView(discord.ui.View):
         button,
         interaction: discord.Interaction,
     ):
-        queue_text = self.cog.build_queue_text(
-            interaction.guild.id
-        )
 
         await interaction.response.send_message(
-            queue_text,
+            self.cog.build_queue_text(
+                interaction.guild.id
+            ),
             ephemeral=True,
         )
 
@@ -264,6 +387,7 @@ class MusicPlayerView(discord.ui.View):
 async def play_autocomplete(
     ctx: discord.AutocompleteContext,
 ):
+
     cog = ctx.cog
 
     if cog is None:
@@ -285,6 +409,7 @@ async def play_autocomplete(
 async def remove_autocomplete(
     ctx: discord.AutocompleteContext,
 ):
+
     cog = ctx.cog
 
     if cog is None or ctx.guild is None:
@@ -294,15 +419,13 @@ async def remove_autocomplete(
         ctx.guild.id
     )
 
-    items = queue.items()
-
     return [
         discord.OptionChoice(
             name=f"{index}. {track.title}"[:100],
             value=str(index),
         )
         for index, track in enumerate(
-            items,
+            queue.items(),
             start=1,
         )
     ][:25]
@@ -314,7 +437,10 @@ async def remove_autocomplete(
 
 class MusicCommands(commands.Cog):
 
-    def __init__(self, bot):
+    def __init__(
+        self,
+        bot,
+    ):
         self.bot = bot
         self.resolver = MusicResolver()
         self.player = MusicPlayer(bot)
@@ -329,6 +455,7 @@ class MusicCommands(commands.Cog):
 
     @commands.command()
     async def leave(self, ctx):
+
         if not ctx.voice_client:
             await ctx.send(
                 "I'm not connected to a voice channel."
@@ -344,6 +471,10 @@ class MusicCommands(commands.Cog):
             "Left the voice channel."
         )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command()
     async def play(
         self,
@@ -351,6 +482,7 @@ class MusicCommands(commands.Cog):
         *,
         query: str,
     ):
+
         await self._play(
             ctx,
             query,
@@ -359,6 +491,7 @@ class MusicCommands(commands.Cog):
 
     @commands.command()
     async def pause(self, ctx):
+
         if not ctx.voice_client:
             await ctx.send(
                 "I'm not connected to a voice channel."
@@ -376,8 +509,13 @@ class MusicCommands(commands.Cog):
                 "Nothing is currently playing."
             )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command()
     async def resume(self, ctx):
+
         if not ctx.voice_client:
             await ctx.send(
                 "I'm not connected to a voice channel."
@@ -395,8 +533,13 @@ class MusicCommands(commands.Cog):
                 "Nothing is paused."
             )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command()
     async def skip(self, ctx):
+
         if not ctx.voice_client:
             await ctx.send(
                 "I'm not connected to a voice channel."
@@ -414,8 +557,13 @@ class MusicCommands(commands.Cog):
                 "Nothing is currently playing."
             )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command()
     async def stop(self, ctx):
+
         if not ctx.voice_client:
             await ctx.send(
                 "I'm not connected to a voice channel."
@@ -435,8 +583,36 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
+    @commands.command()
+    async def previous(self, ctx):
+
+        if not ctx.voice_client:
+            await ctx.send(
+                "I'm not connected to a voice channel."
+            )
+            return
+
+        success = await self.player.previous(
+            ctx.guild,
+            ctx.voice_client,
+        )
+
+        if success:
+            await ctx.send(
+                "⏮️ Previous song."
+            )
+        else:
+            await ctx.send(
+                "There is no previous song."
+            )
+
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command(name="queue")
     async def show_queue(self, ctx):
+
         await ctx.send(
             self.build_queue_text(
                 ctx.guild.id
@@ -449,14 +625,20 @@ class MusicCommands(commands.Cog):
         ctx,
         index: int,
     ):
+
         await self._remove(
             ctx.guild.id,
             index,
             ctx.send,
         )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
     @commands.command()
     async def removeme(self, ctx):
+
         queue = self.player.get_queue(
             ctx.guild.id
         )
@@ -482,20 +664,44 @@ class MusicCommands(commands.Cog):
 
     @commands.command()
     async def myqueue(self, ctx):
-        await self._myqueue(
-            ctx.guild.id,
-            ctx.author.id,
-            ctx.send,
+
+        await ctx.send(
+            self.build_myqueue_text(
+                ctx.guild.id,
+                ctx.author.id,
+            )
         )
 
     @commands.command()
     async def clear(self, ctx):
+
+        await ctx.send(
+            "Queue cleared."
+        )
+
         self.player.clear_queue(
             ctx.guild.id
         )
 
+        await self.update_player_message(
+            ctx.guild
+        )
+
+    @commands.command()
+    async def shuffle(self, ctx):
+
+        success = self.player.shuffle_queue(
+            ctx.guild.id
+        )
+
+        if not success:
+            await ctx.send(
+                "You need at least two songs in the queue to shuffle."
+            )
+            return
+
         await ctx.send(
-            "Queue cleared."
+            "🔀 Queue shuffled."
         )
 
         await self.update_player_message(
@@ -514,6 +720,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         await ctx.defer()
 
         if (
@@ -532,6 +739,7 @@ class MusicCommands(commands.Cog):
         voice_client = ctx.voice_client
 
         try:
+
             if voice_client:
 
                 if (
@@ -549,9 +757,7 @@ class MusicCommands(commands.Cog):
                 )
 
             else:
-                voice_client = (
-                    await target_channel.connect()
-                )
+                await target_channel.connect()
 
             await ctx.guild.change_voice_state(
                 channel=target_channel,
@@ -562,18 +768,8 @@ class MusicCommands(commands.Cog):
                 f"Joined **{target_channel.name}**."
             )
 
-        except discord.ClientException as exc:
-            await ctx.followup.send(
-                f"Voice connection failed: "
-                f"`{exc}`"
-            )
-
-        except asyncio.TimeoutError:
-            await ctx.followup.send(
-                "The voice connection timed out."
-            )
-
         except Exception as exc:
+
             print(
                 f"Slash join error: "
                 f"{type(exc).__name__}: {exc}"
@@ -591,6 +787,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
@@ -606,9 +803,9 @@ class MusicCommands(commands.Cog):
             "Left the voice channel."
         )
 
-    # ========================================================
-    # PLAY
-    # ========================================================
+        await self.update_player_message(
+            ctx.guild
+        )
 
     @discord.slash_command(
         name="play",
@@ -625,6 +822,7 @@ class MusicCommands(commands.Cog):
         ctx: discord.ApplicationContext,
         query: str,
     ):
+
         await ctx.defer()
 
         await self._play(
@@ -632,10 +830,6 @@ class MusicCommands(commands.Cog):
             query,
             ctx.followup.send,
         )
-
-    # ========================================================
-    # PAUSE
-    # ========================================================
 
     @discord.slash_command(
         name="pause",
@@ -645,6 +839,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
@@ -666,10 +861,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # RESUME
-    # ========================================================
-
     @discord.slash_command(
         name="resume",
         description="Resume the current song.",
@@ -678,6 +869,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
@@ -699,10 +891,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # SKIP
-    # ========================================================
-
     @discord.slash_command(
         name="skip",
         description="Skip the current song.",
@@ -711,6 +899,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
@@ -732,10 +921,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # PREVIOUS
-    # ========================================================
-
     @discord.slash_command(
         name="previous",
         description="Play the previous song.",
@@ -744,16 +929,19 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
             )
             return
 
-        if await self.player.previous(
+        success = await self.player.previous(
             ctx.guild,
             ctx.voice_client,
-        ):
+        )
+
+        if success:
             await ctx.respond(
                 "⏮️ Previous song."
             )
@@ -766,10 +954,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # STOP
-    # ========================================================
-
     @discord.slash_command(
         name="stop",
         description="Stop playback and clear the queue.",
@@ -778,6 +962,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         if not ctx.voice_client:
             await ctx.respond(
                 "I'm not connected to a voice channel."
@@ -797,10 +982,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # NOW PLAYING
-    # ========================================================
-
     @discord.slash_command(
         name="nowplaying",
         description="Show the current song.",
@@ -809,6 +990,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         track = self.player.current.get(
             ctx.guild.id
         )
@@ -824,10 +1006,6 @@ class MusicCommands(commands.Cog):
             f"**{track.title}**"
         )
 
-    # ========================================================
-    # QUEUE
-    # ========================================================
-
     @discord.slash_command(
         name="queue",
         description="Show the current music queue.",
@@ -836,15 +1014,12 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         await ctx.respond(
             self.build_queue_text(
                 ctx.guild.id
             )
         )
-
-    # ========================================================
-    # REMOVE
-    # ========================================================
 
     @discord.slash_command(
         name="remove",
@@ -862,6 +1037,7 @@ class MusicCommands(commands.Cog):
         ctx: discord.ApplicationContext,
         index: int,
     ):
+
         await self._remove(
             ctx.guild.id,
             index,
@@ -872,10 +1048,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # REMOVE ME
-    # ========================================================
-
     @discord.slash_command(
         name="removeme",
         description="Remove your last queued song.",
@@ -884,6 +1056,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         queue = self.player.get_queue(
             ctx.guild.id
         )
@@ -907,10 +1080,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # MY QUEUE
-    # ========================================================
-
     @discord.slash_command(
         name="myqueue",
         description="Show your queued songs.",
@@ -919,16 +1088,13 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         await ctx.respond(
             self.build_myqueue_text(
                 ctx.guild.id,
                 ctx.author.id,
             )
         )
-
-    # ========================================================
-    # CLEAR
-    # ========================================================
 
     @discord.slash_command(
         name="clear",
@@ -938,21 +1104,18 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
-        await ctx.respond(
-            "Queue cleared."
-        )
 
         self.player.clear_queue(
             ctx.guild.id
         )
 
+        await ctx.respond(
+            "Queue cleared."
+        )
+
         await self.update_player_message(
             ctx.guild
         )
-
-    # ========================================================
-    # SHUFFLE
-    # ========================================================
 
     @discord.slash_command(
         name="shuffle",
@@ -962,9 +1125,16 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
-        self.player.shuffle_queue(
+
+        success = self.player.shuffle_queue(
             ctx.guild.id
         )
+
+        if not success:
+            await ctx.respond(
+                "You need at least two songs in the queue to shuffle."
+            )
+            return
 
         await ctx.respond(
             "🔀 Queue shuffled."
@@ -974,10 +1144,6 @@ class MusicCommands(commands.Cog):
             ctx.guild
         )
 
-    # ========================================================
-    # LOOP
-    # ========================================================
-
     @discord.slash_command(
         name="loop",
         description="Cycle through loop modes.",
@@ -986,6 +1152,7 @@ class MusicCommands(commands.Cog):
         self,
         ctx: discord.ApplicationContext,
     ):
+
         mode = self.player.cycle_loop_mode(
             ctx.guild.id
         )
@@ -1008,6 +1175,7 @@ class MusicCommands(commands.Cog):
         query: str,
         respond,
     ):
+
         if not ctx.author.voice:
             await respond(
                 "You need to be in a voice channel first."
@@ -1015,6 +1183,7 @@ class MusicCommands(commands.Cog):
             return
 
         try:
+
             track = await self.resolver.resolve(
                 query=query,
                 requester_id=ctx.author.id,
@@ -1022,6 +1191,7 @@ class MusicCommands(commands.Cog):
             )
 
         except Exception as exc:
+
             print(
                 f"Resolver error: "
                 f"{type(exc).__name__}: {exc}"
@@ -1035,6 +1205,7 @@ class MusicCommands(commands.Cog):
         voice_client = ctx.voice_client
 
         if voice_client is None:
+
             voice_client = (
                 await ctx.author.voice.channel.connect()
             )
@@ -1048,6 +1219,7 @@ class MusicCommands(commands.Cog):
             voice_client.channel
             != ctx.author.voice.channel
         ):
+
             await voice_client.move_to(
                 ctx.author.voice.channel
             )
@@ -1071,6 +1243,7 @@ class MusicCommands(commands.Cog):
             voice_client.is_playing()
             or voice_client.is_paused()
         ):
+
             position = len(queue)
 
             await respond(
@@ -1080,6 +1253,7 @@ class MusicCommands(commands.Cog):
             )
 
         else:
+
             await respond(
                 f"▶️ Playing **{track.title}**"
             )
@@ -1095,7 +1269,7 @@ class MusicCommands(commands.Cog):
         )
 
     # ========================================================
-    # PLAYER MESSAGE
+    # PLAYER EMBED
     # ========================================================
 
     def build_player_embed(
@@ -1116,6 +1290,7 @@ class MusicCommands(commands.Cog):
         )
 
         if current is None:
+
             embed = discord.Embed(
                 title="🎵 Music Player",
                 description=(
@@ -1125,6 +1300,7 @@ class MusicCommands(commands.Cog):
             )
 
         else:
+
             duration = self.format_duration(
                 current.duration
             )
@@ -1150,12 +1326,8 @@ class MusicCommands(commands.Cog):
 
         embed.add_field(
             name="Loop",
-            value=loop_mode,
+            value=loop_mode.upper(),
             inline=True,
-        )
-
-        embed.set_footer(
-            text="Use the buttons below to control playback."
         )
 
         return embed
@@ -1165,6 +1337,7 @@ class MusicCommands(commands.Cog):
         guild: discord.Guild,
         channel=None,
     ):
+
         guild_id = guild.id
 
         stored = self.player.get_player_message(
@@ -1173,7 +1346,11 @@ class MusicCommands(commands.Cog):
 
         target_channel = channel
 
-        if target_channel is None and stored:
+        if (
+            target_channel is None
+            and stored
+        ):
+
             channel_id, _ = stored
 
             target_channel = guild.get_channel(
@@ -1186,18 +1363,27 @@ class MusicCommands(commands.Cog):
         message = None
 
         if stored:
+
             _, message_id = stored
 
             try:
-                message = await target_channel.fetch_message(
-                    message_id
+
+                message = (
+                    await target_channel.fetch_message(
+                        message_id
+                    )
                 )
 
             except (
                 discord.NotFound,
                 discord.HTTPException,
             ):
+
                 message = None
+
+                self.player.clear_player_message(
+                    guild_id
+                )
 
         view = MusicPlayerView(
             self,
@@ -1209,17 +1395,24 @@ class MusicCommands(commands.Cog):
         )
 
         if message is None:
+
             try:
-                message = await target_channel.send(
-                    embed=embed,
-                    view=view,
+
+                message = (
+                    await target_channel.send(
+                        embed=embed,
+                        view=view,
+                    )
                 )
 
             except discord.HTTPException as exc:
+
                 print(
                     f"Player message error: "
-                    f"{type(exc).__name__}: {exc}"
+                    f"{type(exc).__name__}: "
+                    f"{exc}"
                 )
+
                 return
 
             self.player.set_player_message(
@@ -1229,21 +1422,26 @@ class MusicCommands(commands.Cog):
             )
 
         else:
+
             try:
+
                 await message.edit(
                     embed=embed,
                     view=view,
                 )
 
             except discord.NotFound:
+
                 self.player.clear_player_message(
                     guild_id
                 )
 
             except discord.HTTPException as exc:
+
                 print(
                     f"Player update error: "
-                    f"{type(exc).__name__}: {exc}"
+                    f"{type(exc).__name__}: "
+                    f"{exc}"
                 )
 
     # ========================================================
@@ -1266,6 +1464,7 @@ class MusicCommands(commands.Cog):
         lines = []
 
         if current:
+
             lines.append(
                 f"▶️ **Now Playing:** "
                 f"{current.title}"
@@ -1274,6 +1473,7 @@ class MusicCommands(commands.Cog):
         items = queue.items()
 
         if items:
+
             lines.append("")
             lines.append("**Up Next:**")
 
@@ -1281,6 +1481,7 @@ class MusicCommands(commands.Cog):
                 items,
                 start=1,
             ):
+
                 lines.append(
                     f"`{index}.` "
                     f"**{track.title}** "
@@ -1320,6 +1521,7 @@ class MusicCommands(commands.Cog):
             tracks,
             start=1,
         ):
+
             lines.append(
                 f"`{index}.` {track.title}"
             )
@@ -1349,13 +1551,16 @@ class MusicCommands(commands.Cog):
         )
 
         if hours:
+
             return (
-                f"{hours}:{minutes:02d}:"
+                f"{hours}:"
+                f"{minutes:02d}:"
                 f"{seconds:02d}"
             )
 
         return (
-            f"{minutes}:{seconds:02d}"
+            f"{minutes}:"
+            f"{seconds:02d}"
         )
 
     async def _remove(
@@ -1364,33 +1569,23 @@ class MusicCommands(commands.Cog):
         index: int,
         respond,
     ):
+
         track = self.player.remove(
             guild_id,
             index,
         )
 
         if track is None:
+
             await respond(
                 "Invalid queue position."
             )
+
             return
 
         await respond(
             f"Removed **{track.title}** "
             f"from the queue."
-        )
-
-    async def _myqueue(
-        self,
-        guild_id: int,
-        user_id: int,
-        respond,
-    ):
-        await respond(
-            self.build_myqueue_text(
-                guild_id,
-                user_id,
-            )
         )
 
 
