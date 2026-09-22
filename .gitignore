@@ -1,0 +1,51 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+logs/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+
+# PyCharm
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Bot runtime data
+data/
+cache/
